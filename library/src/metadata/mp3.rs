@@ -1,13 +1,155 @@
 use crate::{
-	Error, Tag,
+	Error, Tag, UNKNOWN,
 	utilities::stream::{Be, Bytes},
 };
+use encoding_rs::{UTF_8, UTF_16BE, WINDOWS_1252};
 use std::{
 	io::{ErrorKind, Read, Seek, Write, copy},
 	slice,
 };
 
 const XING_SIZE: usize = 120;
+
+macro_rules! read {
+	($source:expr, $size:expr) => {{
+		let mut data = [0; $size];
+		$source.read_exact(&mut data).and(Ok(data))
+	}};
+}
+
+fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Tag, usize), Error> {
+	let name = read!(source, 4)?;
+	let size = Be::u32(source)? as usize;
+	let options = read!(source, 2)?;
+	// TODO
+	if options[1] & 0b10000000 > 0 {
+		source.seek_relative(4)?;
+	}
+	if options[1] & 0b01000000 > 0 {
+		source.seek_relative(1)?;
+	}
+	if options[1] & 0b00100000 > 0 {
+		source.seek_relative(1)?;
+	}
+	let mut value = vec![0; size];
+	source.read_exact(&mut value)?;
+	let name = match &name {
+		b"TALB" => "Title",
+		b"TBPM" => "Beats per minute",
+		b"TCOM" => "Composer",
+		b"TCON" => "Content type",
+		b"TCOP" => "Copyright",
+		b"TDAT" => "Date",
+		b"TDLY" => "Playlist delay",
+		b"TENC" => "Encoded by",
+		b"TEXT" => "Lyricist",
+		b"TFLT" => "File type",
+		b"TIME" => "Time",
+		b"TIT1" => "Content group description",
+		b"TIT2" => "Title/songname/content description",
+		b"TIT3" => "Subtitle/Description refinement",
+		b"TKEY" => "Initial key",
+		b"TLAN" => "Language(s)",
+		b"TLEN" => "Length",
+		b"TMED" => "Media type",
+		b"TOAL" => "Original title",
+		b"TOFN" => "Original filename",
+		b"TOLY" => "Original lyricist(s)",
+		b"TOPE" => "Original artist(s)",
+		b"TORY" => "Original release year",
+		b"TOWN" => "File owner",
+		b"TPE1" => "Lead performer(s)",
+		b"TPE2" => "Band",
+		b"TPE3" => "Conductor refinement",
+		b"TPE4" => "Interpreted, remixed, or otherwise modified by",
+		b"TPOS" => "Part of a set",
+		b"TPUB" => "Publisher",
+		b"TRCK" => "Track number",
+		b"TRDA" => "Recording dates",
+		b"TRSN" => "Internet radio station name",
+		b"TRSO" => "Internet radio station owner",
+		b"TSIZ" => "Size",
+		b"TSRC" => "ISRC",
+		b"TSSE" => "Software",
+		b"TYER" => "Year",
+		b"TXXX" => {
+			let decoder = match value[0] {
+				0 => WINDOWS_1252,
+				1 => {
+					let separator = value[1..]
+						.chunks(2)
+						.position(|values| values[0] == 0 && values[1] == 0)
+						.map(|position| position * 2 + 1)
+						.unwrap_or(size);
+					let (name, _, _) = UTF_16BE.decode(&value[1..separator]);
+					let name = name.to_string();
+					let value = if separator < size {
+						let (value, _, _) = UTF_16BE.decode(&value[separator + 2..]);
+						value.to_string()
+					} else {
+						"".to_string()
+					};
+					return Ok((Tag { name, value }, size + 10));
+				}
+				_ => UTF_8,
+			};
+			let separator = value[1..]
+				.iter()
+				.position(|&value| value == 0)
+				.map(|position| position + 1)
+				.unwrap_or(size);
+			let (name, _, _) = decoder.decode(&value[1..separator]);
+			let name = name.to_string();
+			let value = if separator < size {
+				let (value, _, _) = decoder.decode(&value[separator + 1..]);
+				value.to_string()
+			} else {
+				"".to_string()
+			};
+			return Ok((Tag { name, value }, size + 10));
+		}
+		name => {
+			let name = String::from_utf8_lossy(name).to_string();
+			return Ok((
+				Tag {
+					name,
+					value: UNKNOWN.to_string(),
+				},
+				size + 10,
+			));
+		}
+	}
+	.to_string();
+	let (decoder, value) = match value[0] {
+		0 => {
+			let value = if value[size - 1] == 0 {
+				&value[1..size - 1]
+			} else {
+				&value[1..]
+			};
+			(WINDOWS_1252, value)
+		}
+		1 => {
+			let value = if value[size - 2] == 0 && value[size - 1] == 0 {
+				&value[1..size - 2]
+			} else {
+				&value[1..]
+			};
+			(UTF_16BE, value)
+		}
+		_ => {
+			let value = if value[size - 1] == 0 {
+				&value[1..size - 1]
+			} else {
+				&value[1..]
+			};
+			(UTF_8, value)
+		}
+	};
+	let (value, _, _) = decoder.decode(value);
+	let value = value.to_string();
+	Ok((Tag { name, value }, size + 10))
+}
 
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 	let mut metadata = Vec::new();
@@ -19,12 +161,19 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 			let (size, _) = parse_header(&header)?;
 			source.seek_relative(size as i64 - 4)?;
 		} else if &header[0..3] == b"ID3" {
-			// TODO
-			source.seek_relative(2)?;
-			let mut data = [0; 4];
-			source.read_exact(&mut data)?;
-			let size = size(&data);
-			source.seek_relative(size as i64)?;
+			source.seek_relative(1)?;
+			let options = Be::u8(source)?;
+			let size = read!(source, 4)?;
+			let mut size = parse_size(&size);
+			if options & 0b01000000 > 0 {
+				let size = Be::u32(source)?;
+				source.seek_relative(size as i64)?;
+			}
+			while size > 0 {
+				let (tag, processed) = parse_frame(source)?;
+				metadata.push(tag);
+				size -= processed as u32;
+			}
 		} else if &header[0..3] == b"TAG" {
 			macro_rules! read_tag {
 				($size: expr, $name:expr) => {{
@@ -85,7 +234,7 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 			source.seek_relative(2)?;
 			let mut data = [0; 4];
 			source.read_exact(&mut data)?;
-			let size = size(&data);
+			let size = parse_size(&data);
 			source.seek_relative(size as i64)?;
 		} else if &header[0..3] == b"TAG" {
 			break;
@@ -109,7 +258,7 @@ fn header<R: Read>(source: &mut R) -> Result<Option<[u8; 4]>, Error> {
 	Ok(Some(data))
 }
 
-fn size(data: &[u8; 4]) -> u32 {
+fn parse_size(data: &[u8; 4]) -> u32 {
 	((data[0] as u32) << 21) + ((data[1] as u32) << 14) + ((data[2] as u32) << 7) + data[3] as u32
 }
 
