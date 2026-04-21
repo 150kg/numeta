@@ -217,6 +217,16 @@ fn get_id3v2_txxx_utf8_unterminated() {
 }
 
 #[test]
+fn get_id3v2_extended_header() {
+	let source = &[
+		b'I', b'D', b'3', 0x03, 0x00, 0b01000000, 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00, 0x06,
+		0x01, 0x00, b'T', b'A', b'L', b'B', 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, b'H', b'i',
+		b'g', b'h', b'e', b'r', b' ', b'G', b'r', b'o', b'u', b'n', b'd', 0x00,
+	];
+	metadata!(source, "Title" => "Higher Ground");
+}
+
+#[test]
 fn get_id3v2_unknown() {
 	let source = &[
 		b'I', b'D', b'3', 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, b'?', b'?', b'?', b'?', 0x00,

@@ -166,8 +166,9 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 			let size = read!(source, 4)?;
 			let mut size = parse_size(&size);
 			if options & 0b01000000 > 0 {
-				let size = Be::u32(source)?;
-				source.seek_relative(size as i64)?;
+				let extra_size = Be::u32(source)?;
+				source.seek_relative(extra_size as i64 - 4)?;
+				size -= extra_size;
 			}
 			while size > 0 {
 				let (tag, processed) = parse_frame(source)?;
