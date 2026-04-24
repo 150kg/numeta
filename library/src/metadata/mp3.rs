@@ -75,26 +75,19 @@ fn parse_id3v2<R: Read + Seek>(source: &mut R, metadata: &mut Vec<Tag>) -> Resul
 	}
 	while size > 0 {
 		let (tag, processed) = parse_frame(source)?;
-		metadata.push(tag);
+		if let Some(tag) = tag {
+			metadata.push(tag);
+		}
 		size -= processed as u32;
 	}
 	Ok(())
 }
 
-fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Tag, usize), Error> {
+fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize), Error> {
 	let name = read!(source, 4)?;
 	let size = Be::u32(source)? as usize;
 	let options = read!(source, 2)?;
-	// TODO
-	if options[1] & 0b10000000 > 0 {
-		source.seek_relative(4)?;
-	}
-	if options[1] & 0b01000000 > 0 {
-		source.seek_relative(1)?;
-	}
-	if options[1] & 0b00100000 > 0 {
-		source.seek_relative(1)?;
-	}
+	let encrypted = options[1] & 0b01000000 > 0;
 	let mut value = vec![0; size];
 	source.read_exact(&mut value)?;
 	let name = match &name {
@@ -137,34 +130,32 @@ fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Tag, usize), Error> {
 		b"TSSE" => "Software",
 		b"TYER" => "Year",
 		b"TXXX" => {
+			if encrypted {
+				return Ok((None, size + 10));
+			}
 			let tag = parse_txxx(&value)?;
-			return Ok((tag, size + 10));
+			return Ok((Some(tag), size + 10));
 		}
-		name => {
-			let name = String::from_utf8_lossy(name).to_string();
-			return Ok((
-				Tag {
-					name,
-					value: UNKNOWN.to_string(),
-				},
-				size + 10,
-			));
-		}
+		_ => return Ok((None, size + 10)),
 	}
 	.to_string();
-	let (decoder, character_size) = match value[0] {
-		0 => (WINDOWS_1252, 1),
-		1 => (UTF_16BE, 2),
-		_ => (UTF_8, 1),
-	};
-	let value = if value[size - character_size] == 0 {
-		&value[1..size - character_size]
+	let value = if encrypted {
+		UNKNOWN.to_string()
 	} else {
-		&value[1..]
+		let (decoder, character_size) = match value[0] {
+			0 => (WINDOWS_1252, 1),
+			1 => (UTF_16BE, 2),
+			_ => (UTF_8, 1),
+		};
+		let value = if value[size - character_size] == 0 {
+			&value[1..size - character_size]
+		} else {
+			&value[1..]
+		};
+		let (value, _, _) = decoder.decode(value);
+		value.to_string()
 	};
-	let (value, _, _) = decoder.decode(value);
-	let value = value.to_string();
-	Ok((Tag { name, value }, size + 10))
+	Ok((Some(Tag { name, value }), size + 10))
 }
 
 fn parse_txxx(value: &[u8]) -> Result<Tag, Error> {

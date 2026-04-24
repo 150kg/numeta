@@ -227,6 +227,21 @@ fn get_id3v2_extended_header() {
 }
 
 #[test]
+fn get_id3v2_encrypted() {
+	let source = &[
+		b'I', b'D', b'3', 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x61, b'E', b'N', b'C', b'R', 0x00,
+		0x00, 0x00, 0x2D, 0x00, 0x00, b'h', b't', b't', b'p', b's', b':', b'/', b'/', b'w', b'w',
+		b'w', b'.', b'y', b'o', b'u', b't', b'u', b'b', b'e', b'.', b'c', b'o', b'm', b'/', b'w',
+		b'a', b't', b'c', b'h', b'?', b'v', b'=', b'd', b'Q', b'w', b'4', b'w', b'9', b'W', b'g',
+		b'X', b'c', b'Q', 0x00, 0x80, b'T', b'X', b'X', b'X', 0x00, 0x00, 0x00, 0x07, 0b00000000,
+		0b01000000, 0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, b'T', b'A', b'L', b'B', 0x00, 0x00,
+		0x00, 0x0F, 0x00, 0x00, 0x00, b'H', b'i', b'g', b'h', b'e', b'r', b' ', b'G', b'r', b'o',
+		b'u', b'n', b'd', 0x00,
+	];
+	metadata!(source, "Title" => "Higher Ground");
+}
+
+#[test]
 fn get_id3v2_unknown() {
 	let source = &[
 		b'I', b'D', b'3', 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, b'?', b'?', b'?', b'?', 0x00,
@@ -234,5 +249,5 @@ fn get_id3v2_unknown() {
 		0x00, 0x12, 0x00, 0x00, 0x03, 0xD0, 0x9F, 0xD1, 0x80, 0xD0, 0xBE, 0xD0, 0xB3, 0xD1, 0x83,
 		0xD0, 0xBB, 0xD0, 0xBA, 0xD0, 0xB0, 0x00,
 	];
-	metadata!(source, "????" => "Unknown", "Title" => "Прогулка");
+	metadata!(source, "Title" => "Прогулка");
 }
