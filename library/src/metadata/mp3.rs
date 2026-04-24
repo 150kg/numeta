@@ -17,6 +17,70 @@ macro_rules! read {
 	}};
 }
 
+pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
+	let mut metadata = Vec::new();
+	loop {
+		let Some(header) = header(source)? else {
+			return Ok(metadata);
+		};
+		if header[0] == 0xFF {
+			let (size, _) = parse_header(&header)?;
+			source.seek_relative(size as i64 - 4)?;
+		} else if &header[0..3] == b"ID3" {
+			parse_id3v2(source, &mut metadata)?;
+		} else if &header[0..3] == b"TAG" {
+			parse_id3v1(source, &mut metadata)?;
+		} else {
+			return Err(Error::File);
+		}
+	}
+}
+
+fn parse_id3v1<R: Read + Seek>(source: &mut R, metadata: &mut Vec<Tag>) -> Result<(), Error> {
+	macro_rules! read_tag {
+		($size: expr, $name:expr) => {{
+			let mut data = [0; $size];
+			source.read_exact(&mut data)?;
+			let size = data.iter().position(|value| *value == 0).unwrap_or($size);
+			if size > 0 {
+				metadata.push(Tag {
+					name: $name.to_string(),
+					value: String::from_utf8_lossy(&data[..size]).to_string(),
+				});
+			}
+		}};
+	}
+	source.seek_relative(-1)?;
+	read_tag!(30, "Title");
+	read_tag!(30, "Artist");
+	read_tag!(30, "Album");
+	read_tag!(4, "Year");
+	read_tag!(30, "Comment");
+	metadata.push(Tag {
+		name: "Genre".to_string(),
+		value: genre(Be::u8(source)?),
+	});
+	Ok(())
+}
+
+fn parse_id3v2<R: Read + Seek>(source: &mut R, metadata: &mut Vec<Tag>) -> Result<(), Error> {
+	source.seek_relative(1)?;
+	let options = Be::u8(source)?;
+	let size = read!(source, 4)?;
+	let mut size = parse_size(&size);
+	if options & 0b01000000 > 0 {
+		let extra_size = Be::u32(source)?;
+		source.seek_relative(extra_size as i64 - 4)?;
+		size -= extra_size;
+	}
+	while size > 0 {
+		let (tag, processed) = parse_frame(source)?;
+		metadata.push(tag);
+		size -= processed as u32;
+	}
+	Ok(())
+}
+
 fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Tag, usize), Error> {
 	let name = read!(source, 4)?;
 	let size = Be::u32(source)? as usize;
@@ -73,40 +137,8 @@ fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Tag, usize), Error> {
 		b"TSSE" => "Software",
 		b"TYER" => "Year",
 		b"TXXX" => {
-			let decoder = match value[0] {
-				0 => WINDOWS_1252,
-				1 => {
-					let separator = value[1..]
-						.chunks(2)
-						.position(|values| values[0] == 0 && values[1] == 0)
-						.map(|position| position * 2 + 1)
-						.unwrap_or(size);
-					let (name, _, _) = UTF_16BE.decode(&value[1..separator]);
-					let name = name.to_string();
-					let value = if separator < size {
-						let (value, _, _) = UTF_16BE.decode(&value[separator + 2..]);
-						value.to_string()
-					} else {
-						"".to_string()
-					};
-					return Ok((Tag { name, value }, size + 10));
-				}
-				_ => UTF_8,
-			};
-			let separator = value[1..]
-				.iter()
-				.position(|&value| value == 0)
-				.map(|position| position + 1)
-				.unwrap_or(size);
-			let (name, _, _) = decoder.decode(&value[1..separator]);
-			let name = name.to_string();
-			let value = if separator < size {
-				let (value, _, _) = decoder.decode(&value[separator + 1..]);
-				value.to_string()
-			} else {
-				"".to_string()
-			};
-			return Ok((Tag { name, value }, size + 10));
+			let tag = parse_txxx(&value)?;
+			return Ok((tag, size + 10));
 		}
 		name => {
 			let name = String::from_utf8_lossy(name).to_string();
@@ -120,89 +152,52 @@ fn parse_frame<R: Read + Seek>(source: &mut R) -> Result<(Tag, usize), Error> {
 		}
 	}
 	.to_string();
-	let (decoder, value) = match value[0] {
-		0 => {
-			let value = if value[size - 1] == 0 {
-				&value[1..size - 1]
-			} else {
-				&value[1..]
-			};
-			(WINDOWS_1252, value)
-		}
-		1 => {
-			let value = if value[size - 2] == 0 && value[size - 1] == 0 {
-				&value[1..size - 2]
-			} else {
-				&value[1..]
-			};
-			(UTF_16BE, value)
-		}
-		_ => {
-			let value = if value[size - 1] == 0 {
-				&value[1..size - 1]
-			} else {
-				&value[1..]
-			};
-			(UTF_8, value)
-		}
+	let (decoder, character_size) = match value[0] {
+		0 => (WINDOWS_1252, 1),
+		1 => (UTF_16BE, 2),
+		_ => (UTF_8, 1),
+	};
+	let value = if value[size - character_size] == 0 {
+		&value[1..size - character_size]
+	} else {
+		&value[1..]
 	};
 	let (value, _, _) = decoder.decode(value);
 	let value = value.to_string();
 	Ok((Tag { name, value }, size + 10))
 }
 
-pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
-	let mut metadata = Vec::new();
-	loop {
-		let Some(header) = header(source)? else {
-			return Ok(metadata);
-		};
-		if header[0] == 0xFF {
-			let (size, _) = parse_header(&header)?;
-			source.seek_relative(size as i64 - 4)?;
-		} else if &header[0..3] == b"ID3" {
-			source.seek_relative(1)?;
-			let options = Be::u8(source)?;
-			let size = read!(source, 4)?;
-			let mut size = parse_size(&size);
-			if options & 0b01000000 > 0 {
-				let extra_size = Be::u32(source)?;
-				source.seek_relative(extra_size as i64 - 4)?;
-				size -= extra_size;
+fn parse_txxx(value: &[u8]) -> Result<Tag, Error> {
+	let (decoder, character_size) = match value[0] {
+		0 => (WINDOWS_1252, 1),
+		1 => (UTF_16BE, 2),
+		_ => (UTF_8, 1),
+	};
+	let separator = separator(value, character_size);
+	let (name, _, _) = decoder.decode(&value[1..separator]);
+	let name = name.to_string();
+	let value = if separator < value.len() {
+		let (value, _, _) = decoder.decode(&value[separator + character_size..]);
+		value.to_string()
+	} else {
+		"".to_string()
+	};
+	Ok(Tag { name, value })
+}
+
+fn separator(value: &[u8], character_size: usize) -> usize {
+	let separator = value[1..]
+		.chunks(character_size)
+		.position(|values| {
+			let mut zero = true;
+			for i in 0..character_size {
+				zero = zero && values[i] == 0;
 			}
-			while size > 0 {
-				let (tag, processed) = parse_frame(source)?;
-				metadata.push(tag);
-				size -= processed as u32;
-			}
-		} else if &header[0..3] == b"TAG" {
-			macro_rules! read_tag {
-				($size: expr, $name:expr) => {{
-					let mut data = [0; $size];
-					source.read_exact(&mut data)?;
-					let size = data.iter().position(|value| *value == 0).unwrap_or($size);
-					if size > 0 {
-						metadata.push(Tag {
-							name: $name.to_string(),
-							value: String::from_utf8_lossy(&data[..size]).to_string(),
-						});
-					}
-				}};
-			}
-			source.seek_relative(-1)?;
-			read_tag!(30, "Title");
-			read_tag!(30, "Artist");
-			read_tag!(30, "Album");
-			read_tag!(4, "Year");
-			read_tag!(30, "Comment");
-			metadata.push(Tag {
-				name: "Genre".to_string(),
-				value: genre(Be::u8(source)?),
-			});
-		} else {
-			return Err(Error::File);
-		}
-	}
+			zero
+		})
+		.map(|position| position * character_size + 1)
+		.unwrap_or(value.len());
+	separator
 }
 
 pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> Result<(), Error> {
