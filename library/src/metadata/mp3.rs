@@ -30,6 +30,8 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 			parse_id3v2(source, &mut metadata)?;
 		} else if &header[0..3] == b"TAG" {
 			parse_id3v1(source, &mut metadata)?;
+		} else if &header[0..3] == b"3DI" {
+			source.seek_relative(6)?;
 		} else {
 			return Err(Error::File);
 		}
@@ -223,6 +225,8 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 			source.read_exact(&mut data)?;
 			let size = parse_size(&data);
 			source.seek_relative(size as i64)?;
+		} else if &header[0..3] == b"3DI" {
+			break;
 		} else if &header[0..3] == b"TAG" {
 			break;
 		} else {
