@@ -1,6 +1,9 @@
 use crate::{
 	Error, Tag, UNKNOWN,
-	utilities::stream::{Be, Bytes},
+	utilities::{
+		read,
+		stream::{Be, Bytes},
+	},
 };
 use encoding_rs::{UTF_8, UTF_16BE, WINDOWS_1252};
 use std::{
@@ -9,13 +12,6 @@ use std::{
 };
 
 const XING_SIZE: usize = 120;
-
-macro_rules! read {
-	($source:expr, $size:expr) => {{
-		let mut data = [0; $size];
-		$source.read_exact(&mut data).and(Ok(data))
-	}};
-}
 
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 	let mut metadata = Vec::new();

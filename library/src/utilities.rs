@@ -4,6 +4,13 @@ macro_rules! min {
 	};
 }
 
+macro_rules! read {
+	($source:expr, $size:expr) => {{
+		let mut data = [0; $size];
+		$source.read_exact(&mut data).and(Ok(data))
+	}};
+}
+
 macro_rules! seek {
 	($source:expr, $size:expr) => {
 		$source.seek_relative($size.into())
@@ -11,6 +18,7 @@ macro_rules! seek {
 }
 
 pub(crate) use min;
+pub(crate) use read;
 pub(crate) use seek;
 
 pub mod bytes {
