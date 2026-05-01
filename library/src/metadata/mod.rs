@@ -2,6 +2,7 @@ use crate::{Error, Tag};
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 
 pub mod exif;
+pub mod flac;
 pub mod iptc;
 pub mod jpeg;
 pub mod mp3;
@@ -10,12 +11,14 @@ pub mod pdf;
 pub mod png;
 #[cfg(test)]
 mod test;
+pub mod vorbis;
 pub mod webp;
 pub mod xmp;
 
 #[derive(Debug)]
 pub enum Metadata {
 	Docx,
+	Flac,
 	Jpeg,
 	Mp3,
 	Pdf,
@@ -53,6 +56,11 @@ impl Metadata {
 					return Ok(Some(Metadata::Webp));
 				}
 			}
+			b'f' => {
+				if &data[1..4] == b"LaC" {
+					return Ok(Some(Metadata::Flac));
+				}
+			}
 			0x50 => {
 				if data[1..4] == [0x4B, 0x03, 0x04] {
 					match extension {
@@ -82,6 +90,7 @@ impl Metadata {
 	pub fn get<R: Read + Seek>(&self, source: &mut R) -> Result<Vec<Tag>, Error> {
 		match self {
 			Metadata::Docx => office::get(source),
+			Metadata::Flac => flac::get(source),
 			Metadata::Jpeg => jpeg::get(source),
 			Metadata::Mp3 => mp3::get(source),
 			Metadata::Pdf => pdf::get(source),
@@ -98,6 +107,7 @@ impl Metadata {
 	) -> Result<(), Error> {
 		match self {
 			Metadata::Docx => office::delete(source, destination, "word/"),
+			Metadata::Flac => flac::delete(source, destination),
 			Metadata::Jpeg => jpeg::delete(source, destination),
 			Metadata::Mp3 => mp3::delete(source, destination),
 			Metadata::Pdf => pdf::delete(source, destination),

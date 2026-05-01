@@ -1,9 +1,11 @@
 mod exif;
+mod flac;
 mod iptc;
 mod jpeg;
 mod mp3;
 mod pdf;
 mod png;
+mod vorbis;
 mod webp;
 mod xmp;
 
