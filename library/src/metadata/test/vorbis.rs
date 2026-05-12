@@ -54,6 +54,16 @@ fn two_tags() {
 }
 
 #[test]
+fn no_value() {
+	let data = &[
+		0x0D, 0x00, 0x00, 0x00, b'L', b'a', b'v', b'f', b'6', b'0', b'.', b'1', b'2', b'.', b'1',
+		b'0', b'0', 0x01, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, b'H', b'i', b'g', b'h', b'e',
+		b'r', b' ', b'G', b'r', b'o', b'u', b'n', b'd',
+	];
+	ok!(data, "Higher Ground" => "");
+}
+
+#[test]
 fn missing_data_1() {
 	error!(&[]);
 }
