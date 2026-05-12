@@ -15,6 +15,13 @@ macro_rules! ok {
 	};
 }
 
+macro_rules! error {
+	($data:expr) => {
+		let mut metadata = Vec::new();
+		assert!(get($data, &mut metadata).is_err());
+	};
+}
+
 #[test]
 fn no_tags() {
 	let data = &[
@@ -44,4 +51,38 @@ fn two_tags() {
 		b'e', b' ', b'W', b'o', b'n', b'd', b'e', b'r',
 	];
 	ok!(data, "TITLE" => "Higher Ground", "ARTIST" => "Stevie Wonder");
+}
+
+#[test]
+fn missing_data_1() {
+	error!(&[]);
+}
+
+#[test]
+fn missing_data_2() {
+	error!(&[0x0D, 0x00, 0x00, 0x00]);
+}
+
+#[test]
+fn missing_data_3() {
+	error!(&[
+		0x0D, 0x00, 0x00, 0x00, b'L', b'a', b'v', b'f', b'6', b'0', b'.', b'1', b'2', b'.', b'1',
+		b'0', b'0',
+	]);
+}
+
+#[test]
+fn missing_data_4() {
+	error!(&[
+		0x0D, 0x00, 0x00, 0x00, b'L', b'a', b'v', b'f', b'6', b'0', b'.', b'1', b'2', b'.', b'1',
+		b'0', b'0', 0x01, 0x00, 0x00, 0x00,
+	]);
+}
+
+#[test]
+fn missing_data_5() {
+	error!(&[
+		0x0D, 0x00, 0x00, 0x00, b'L', b'a', b'v', b'f', b'6', b'0', b'.', b'1', b'2', b'.', b'1',
+		b'0', b'0', 0x01, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00,
+	]);
 }
