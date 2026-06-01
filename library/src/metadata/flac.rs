@@ -85,7 +85,7 @@ fn read_header<R: Read>(source: &mut R) -> Result<Option<(bool, Header)>, Error>
 }
 
 fn write_header<W: Write>(writer: &mut W, last: bool, header: Header) -> Result<(), Error> {
-	writer.write_all(&[(last as u8) << 7 + header.block_type])?;
+	writer.write_all(&[((last as u8) << 7) + header.block_type])?;
 	writer.write_all(&header.size.to_be_bytes()[1..4])?;
 	Ok(())
 }
