@@ -33,7 +33,7 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 			return Err(Error::File);
 		};
 		match header.block_type {
-			0 | 1 | 3 | 5 => {
+			0 | 3 => {
 				if let Some(previous) = previous {
 					write_header(destination, false, previous.0)?;
 					destination.write_all(&previous.1)?;
