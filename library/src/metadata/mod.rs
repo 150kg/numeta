@@ -1,19 +1,19 @@
 use crate::{Error, Tag};
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 
-pub mod exif;
-pub mod flac;
-pub mod iptc;
-pub mod jpeg;
-pub mod mp3;
-pub mod office;
-pub mod pdf;
-pub mod png;
+mod exif;
+mod flac;
+mod iptc;
+mod jpeg;
+mod mp3;
+mod office;
+mod pdf;
+mod png;
 #[cfg(test)]
 mod test;
-pub mod vorbis;
-pub mod webp;
-pub mod xmp;
+mod vorbis;
+mod webp;
+mod xmp;
 
 #[derive(Debug)]
 pub enum Metadata {
