@@ -46,8 +46,8 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 				source.read_exact(&mut name)?;
 				if &name == b"JFIF\0" {
 					seek!(source, 7)?;
-					let width = Be::u8(source)?;
-					let height = Be::u8(source)?;
+					let width = Be::u8(source)? as u16;
+					let height = Be::u8(source)? as u16;
 					if width > 0 && height > 0 {
 						metadata.push(Tag {
 							name: "Thumbnail".to_string(),
