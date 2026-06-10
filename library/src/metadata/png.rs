@@ -167,7 +167,7 @@ fn ztxt<R: Read>(source: &mut R, size: u32) -> Result<Tag, Error> {
 		name.push(character);
 	}
 	let compression = Be::u8(source)?;
-	let mut data = vec![0; size as usize - name.len() - 1];
+	let mut data = vec![0; size as usize - name.len() - 2];
 	source.read_exact(&mut data)?;
 	let mut value = "".to_string();
 	if compression == 0 {
