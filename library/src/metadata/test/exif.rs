@@ -3,14 +3,14 @@ use crate::{Tag, metadata::exif::get};
 macro_rules! ok {
 	($data:expr) => {
 		let mut metadata = Vec::new();
-        assert!(get($data, &mut metadata).is_ok());
-        assert!(metadata.is_empty());
+		assert!(get($data, &mut metadata).is_ok());
+		assert!(metadata.is_empty());
 	};
 	($data:expr, $($name:expr => $value:expr),*) => {
 		let mut a = Vec::new();
 		let mut b = Vec::new();
-        $(b.push(Tag { name: $name.to_string(), value: $value.to_string() });)*
-        assert!(get($data, &mut a).is_ok());
+		$(b.push(Tag { name: $name.to_string(), value: $value.to_string() });)*
+		assert!(get($data, &mut a).is_ok());
 		assert_eq!(a, b);
 	};
 }
