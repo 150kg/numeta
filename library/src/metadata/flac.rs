@@ -4,14 +4,18 @@ use std::{
 	slice,
 };
 
+const STREAMINFO: u8 = 0;
+const SEEKTABLE: u8 = 3;
+const VORBIS_COMMENT: u8 = 4;
+
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
-	source.seek_relative(4)?;
+	seek!(source, 4)?;
 	let mut metadata = Vec::new();
 	loop {
 		let Some((last, header)) = read_header(source)? else {
 			break;
 		};
-		if header.block_type == 4 {
+		if header.block_type == VORBIS_COMMENT {
 			let mut data = vec![0; header.size as usize];
 			source.read_exact(&mut data)?;
 			vorbis::get(&data, &mut metadata)?;
@@ -33,7 +37,7 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 			return Err(Error::File);
 		};
 		match header.block_type {
-			0 | 3 => {
+			STREAMINFO | SEEKTABLE => {
 				if let Some(previous) = previous {
 					write_header(destination, false, previous.0)?;
 					destination.write_all(&previous.1)?;

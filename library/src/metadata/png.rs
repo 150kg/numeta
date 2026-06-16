@@ -14,7 +14,7 @@ use std::{
 };
 
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
-	source.seek_relative(8)?;
+	seek!(source, 8)?;
 	let mut metadata = Vec::new();
 	loop {
 		let Some(size) = size(source)? else {

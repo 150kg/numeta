@@ -1,7 +1,7 @@
 use crate::{
 	Error, Tag, UNKNOWN,
 	utilities::{
-		read,
+		read, seek,
 		stream::{Be, Bytes},
 	},
 };
@@ -21,13 +21,13 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 		};
 		if header[0] == 0xFF {
 			let (size, _) = parse_header(&header)?;
-			source.seek_relative(size as i64 - 4)?;
+			seek!(source, size - 4)?;
 		} else if &header[0..3] == b"ID3" {
 			parse_id3v2(source, &mut metadata)?;
 		} else if &header[0..3] == b"TAG" {
 			parse_id3v1(source, &mut metadata)?;
 		} else if &header[0..3] == b"3DI" {
-			source.seek_relative(6)?;
+			seek!(source, 6)?;
 		} else {
 			return Err(Error::File);
 		}
@@ -48,7 +48,7 @@ fn parse_id3v1<R: Read + Seek>(source: &mut R, metadata: &mut Vec<Tag>) -> Resul
 			}
 		}};
 	}
-	source.seek_relative(-1)?;
+	seek!(source, -1)?;
 	read_tag!(30, "Title");
 	read_tag!(30, "Artist");
 	read_tag!(30, "Album");
@@ -62,21 +62,21 @@ fn parse_id3v1<R: Read + Seek>(source: &mut R, metadata: &mut Vec<Tag>) -> Resul
 }
 
 fn parse_id3v2<R: Read + Seek>(source: &mut R, metadata: &mut Vec<Tag>) -> Result<(), Error> {
-	source.seek_relative(1)?;
+	seek!(source, 1)?;
 	let options = Be::u8(source)?;
 	let size = read!(source, 4)?;
 	let mut size = parse_size(&size);
 	if options & 0b01000000 > 0 {
 		let extra_size = Be::u32(source)?;
-		source.seek_relative(extra_size as i64 - 4)?;
+		seek!(source, extra_size - 4)?;
 		size -= extra_size;
 	}
 	while size > 0 {
-		let (tag, processed) = parse_frame(source)?;
+		let (tag, frame_size) = parse_frame(source)?;
 		if let Some(tag) = tag {
 			metadata.push(tag);
 		}
-		size -= processed as u32;
+		size -= frame_size as u32;
 	}
 	Ok(())
 }
@@ -204,7 +204,7 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 					source.read_exact(&mut data)?;
 					let name = &data[position..position + 4];
 					if name == b"Info" || name == b"Xing" {
-						source.seek_relative(size as i64 - 40)?;
+						seek!(source, size - 40)?;
 					} else {
 						destination.write_all(&header)?;
 						destination.write_all(&data)?;
@@ -216,11 +216,11 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 			destination.write_all(&header)?;
 			copy(&mut source.take(size as u64 - 4), destination)?;
 		} else if &header[0..3] == b"ID3" {
-			source.seek_relative(2)?;
+			seek!(source, 2)?;
 			let mut data = [0; 4];
 			source.read_exact(&mut data)?;
 			let size = parse_size(&data);
-			source.seek_relative(size as i64)?;
+			seek!(source, size)?;
 		} else if &header[0..3] == b"3DI" {
 			break;
 		} else if &header[0..3] == b"TAG" {

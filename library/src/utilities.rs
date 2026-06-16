@@ -13,7 +13,7 @@ macro_rules! read {
 
 macro_rules! seek {
 	($source:expr, $size:expr) => {
-		$source.seek_relative($size.into())
+		$source.seek_relative($size as i64)
 	};
 }
 

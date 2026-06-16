@@ -12,7 +12,7 @@ use std::{
 };
 
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
-	source.seek_relative(12)?;
+	seek!(source, 12)?;
 	let mut metadata = Vec::new();
 	loop {
 		let Some(code) = code(source)? else {
@@ -44,7 +44,7 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 }
 
 pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> Result<(), Error> {
-	source.seek_relative(12)?;
+	seek!(source, 12)?;
 	let mut data = Vec::new();
 	loop {
 		let Some(code) = code(source)? else {
