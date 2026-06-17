@@ -68,13 +68,20 @@ fn parse_id3v2<R: Read + Seek>(
 	metadata: &mut Vec<Tag>,
 ) -> Result<(), Error> {
 	seek!(source, 1)?;
-	let options = Be::u8(source)?;
+	let flags = Be::u8(source)?;
 	let size = read!(source, 4)?;
 	let mut size = parse_size(&size);
-	if options & 0b01000000 > 0 {
-		let extra_size = Be::u32(source)?;
-		seek!(source, extra_size - 4)?;
-		size -= extra_size;
+	match version {
+		2 if flags & 0b01000000 > 0 => {
+			seek!(source, size)?;
+			return Ok(());
+		}
+		3 if flags & 0b01000000 > 0 => {
+			let extra_size = Be::u32(source)?;
+			seek!(source, extra_size - 4)?;
+			size -= extra_size;
+		}
+		_ => {}
 	}
 	while size > 0 {
 		let value = Be::u8(source)?;
@@ -83,13 +90,70 @@ fn parse_id3v2<R: Read + Seek>(
 			break;
 		}
 		seek!(source, -1)?;
-		let (tag, frame_size) = parse_frame(source, version)?;
+		let (tag, frame_size) = match version {
+			2 => parse_frame_22(source)?,
+			_ => parse_frame(source, version)?,
+		};
 		if let Some(tag) = tag {
 			metadata.push(tag);
 		}
 		size -= frame_size as u32;
 	}
 	Ok(())
+}
+
+fn parse_frame_22<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize), Error> {
+	let name = read!(source, 3)?;
+	let size = read!(source, 3)?;
+	let size = u32::from_be_bytes([0, size[0], size[1], size[2]]) as usize;
+	let mut value = vec![0; size];
+	source.read_exact(&mut value)?;
+	let name = match &name {
+		b"TAL" => "Album",
+		b"TBP" => "BPM",
+		b"TCM" => "Composer",
+		b"TCO" => "Genre",
+		b"TCR" => "Copyright",
+		b"TDA" => "Date",
+		b"TDY" => "Playlist delay",
+		b"TEN" => "Encoder",
+		b"TFT" => "File type",
+		b"TIM" => "Time",
+		b"TKE" => "Initial key",
+		b"TLA" => "Language",
+		b"TLE" => "Length",
+		b"TMT" => "Media",
+		b"TOA" => "Original artist",
+		b"TOF" => "Original filename",
+		b"TOL" => "Original lyricist",
+		b"TOR" => "Original release year",
+		b"TOT" => "Original album",
+		b"TP1" => "Artist",
+		b"TP2" => "Band",
+		b"TP3" => "Conductor",
+		b"TP4" => "Interpreted by",
+		b"TPA" => "Part of set",
+		b"TPB" => "Publisher",
+		b"TRC" => "ISRC",
+		b"TRD" => "Recording dates",
+		b"TRK" => "Track",
+		b"TSI" => "Size",
+		b"TSS" => "Encoder settings",
+		b"TT1" => "Grouping",
+		b"TT2" => "Title",
+		b"TT3" => "Subtitle",
+		b"TXT" => "Lyricist",
+		b"TYE" => "Year",
+		b"TXX" => {
+			let tag = parse_txxx(&value)?;
+			return Ok((Some(tag), size + 6));
+		}
+		_ => return Ok((None, size + 6)),
+	};
+	let value = parse_text(&value);
+	let name = name.to_string();
+	let tag = Tag { name, value };
+	Ok((Some(tag), 6 + size))
 }
 
 fn parse_frame<R: Read + Seek>(source: &mut R, version: u8) -> Result<(Option<Tag>, usize), Error> {
@@ -209,6 +273,17 @@ fn parse_txxx(value: &[u8]) -> Result<Tag, Error> {
 		"".to_string()
 	};
 	Ok(Tag { name, value })
+}
+
+fn parse_text(value: &[u8]) -> String {
+	let (decoder, character_size) = match value[0] {
+		0 => (WINDOWS_1252, 1),
+		1 => (UTF_16LE, 2),
+		2 => (UTF_16BE, 2),
+		_ => (UTF_8, 1),
+	};
+	let (value, _, _) = decoder.decode(&value[1..value.len().saturating_sub(character_size)]);
+	value.to_string()
 }
 
 fn separator(value: &[u8], character_size: usize) -> usize {
