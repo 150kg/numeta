@@ -1,5 +1,5 @@
 use crate::{
-	Error, Tag, UNKNOWN,
+	Error, Tag,
 	utilities::{
 		read, seek,
 		stream::{Be, Bytes},
@@ -91,8 +91,9 @@ fn parse_id3v2<R: Read + Seek>(
 		}
 		seek!(source, -1)?;
 		let (tag, frame_size) = match version {
-			2 => parse_frame_22(source)?,
-			_ => parse_frame(source, version)?,
+			4 => parse_frame_24(source)?,
+			3 => parse_frame_23(source)?,
+			_ => parse_frame_22(source)?,
 		};
 		if let Some(tag) = tag {
 			metadata.push(tag);
@@ -156,29 +157,17 @@ fn parse_frame_22<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize)
 	Ok((Some(tag), 6 + size))
 }
 
-fn parse_frame<R: Read + Seek>(source: &mut R, version: u8) -> Result<(Option<Tag>, usize), Error> {
+fn parse_frame_23<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize), Error> {
 	let name = read!(source, 4)?;
 	let size = read!(source, 4)?;
-	let options = read!(source, 2)?;
-	let mut header_size = 10;
-	let size = if version >= 4 {
-		if options[1] & 0b00000001 > 0 {
-			header_size += 4;
-			let size = read!(source, 4)?;
-			parse_size(&size)
-		} else {
-			parse_size(&size)
-		}
-	} else {
-		u32::from_be_bytes(size)
-	} as usize;
+	let flags = read!(source, 2)?;
+	let size = u32::from_be_bytes(size) as usize;
 	let mut value = vec![0; size];
 	source.read_exact(&mut value)?;
-	let encrypted = if version >= 4 {
-		options[1] & 0b00000100 > 0
-	} else {
-		options[1] & 0b01000000 > 0
-	};
+	let size = size + 10;
+	if flags[1] & 0b01000000 > 0 {
+		return Ok((None, size));
+	}
 	let name = match &name {
 		b"TALB" => "Album",
 		b"TBPM" => "BPM",
@@ -186,6 +175,74 @@ fn parse_frame<R: Read + Seek>(source: &mut R, version: u8) -> Result<(Option<Ta
 		b"TCON" => "Genre",
 		b"TCOP" => "Copyright",
 		b"TDAT" => "Date",
+		b"TDLY" => "Playlist delay",
+		b"TENC" => "Encoder",
+		b"TEXT" => "Lyricist",
+		b"TFLT" => "File type",
+		b"TIME" => "Time",
+		b"TIT1" => "Grouping",
+		b"TIT2" => "Title",
+		b"TIT3" => "Subtitle",
+		b"TKEY" => "Initial key",
+		b"TLAN" => "Language",
+		b"TLEN" => "Length",
+		b"TMED" => "Media",
+		b"TOAL" => "Original album",
+		b"TOFN" => "Original filename",
+		b"TOLY" => "Original lyricist",
+		b"TOPE" => "Original artist",
+		b"TORY" => "Original release year",
+		b"TOWN" => "File owner",
+		b"TPE1" => "Artist",
+		b"TPE2" => "Band",
+		b"TPE3" => "Conductor",
+		b"TPE4" => "Interpreted by",
+		b"TPOS" => "Part of set",
+		b"TPUB" => "Publisher",
+		b"TRCK" => "Track",
+		b"TRDA" => "Recording dates",
+		b"TRSN" => "Internet radio station name",
+		b"TRSO" => "Internet radio station owner",
+		b"TSIZ" => "Size",
+		b"TSRC" => "ISRC",
+		b"TSSE" => "Encoder settings",
+		b"TYER" => "Year",
+		b"TXXX" => {
+			let tag = parse_txxx(&value)?;
+			return Ok((Some(tag), size));
+		}
+		_ => return Ok((None, size)),
+	};
+	let value = parse_text(&value);
+	let name = name.to_string();
+	let tag = Tag { name, value };
+	Ok((Some(tag), size))
+}
+
+fn parse_frame_24<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize), Error> {
+	let name = read!(source, 4)?;
+	let size = read!(source, 4)?;
+	let flags = read!(source, 2)?;
+	let mut header_size = 10;
+	let size = if flags[1] & 0b00000001 > 0 {
+		header_size += 4;
+		let size = read!(source, 4)?;
+		parse_size(&size)
+	} else {
+		parse_size(&size)
+	} as usize;
+	let mut value = vec![0; size];
+	source.read_exact(&mut value)?;
+	let size = size + header_size;
+	if flags[1] & 0b00000100 > 0 {
+		return Ok((None, size));
+	};
+	let name = match &name {
+		b"TALB" => "Album",
+		b"TBPM" => "BPM",
+		b"TCOM" => "Composer",
+		b"TCON" => "Genre",
+		b"TCOP" => "Copyright",
 		b"TDEN" => "Encoding time",
 		b"TDLY" => "Playlist delay",
 		b"TDOR" => "Original release time",
@@ -196,7 +253,6 @@ fn parse_frame<R: Read + Seek>(source: &mut R, version: u8) -> Result<(Option<Ta
 		b"TEXT" => "Lyricist",
 		b"TFLT" => "File type",
 		b"TIPL" => "Involved people",
-		b"TIME" => "Time",
 		b"TIT1" => "Grouping",
 		b"TIT2" => "Title",
 		b"TIT3" => "Subtitle",
@@ -210,7 +266,6 @@ fn parse_frame<R: Read + Seek>(source: &mut R, version: u8) -> Result<(Option<Ta
 		b"TOFN" => "Original filename",
 		b"TOLY" => "Original lyricist",
 		b"TOPE" => "Original artist",
-		b"TORY" => "Original release year",
 		b"TOWN" => "File owner",
 		b"TPE1" => "Artist",
 		b"TPE2" => "Band",
@@ -220,40 +275,24 @@ fn parse_frame<R: Read + Seek>(source: &mut R, version: u8) -> Result<(Option<Ta
 		b"TPRO" => "Produced notice",
 		b"TPUB" => "Publisher",
 		b"TRCK" => "Track",
-		b"TRDA" => "Recording dates",
 		b"TRSN" => "Internet radio station name",
 		b"TRSO" => "Internet radio station owner",
-		b"TSIZ" => "Size",
 		b"TSOA" => "Album sort order",
 		b"TSOP" => "Performer sort order",
 		b"TSOT" => "Title sort order",
 		b"TSRC" => "ISRC",
 		b"TSSE" => "Encoder settings",
 		b"TSST" => "Set subtitle",
-		b"TYER" => "Year",
 		b"TXXX" => {
-			if encrypted {
-				return Ok((None, size + header_size));
-			}
 			let tag = parse_txxx(&value)?;
-			return Ok((Some(tag), size + header_size));
+			return Ok((Some(tag), size));
 		}
-		_ => return Ok((None, size + header_size)),
-	}
-	.to_string();
-	let value = if encrypted {
-		UNKNOWN.to_string()
-	} else {
-		let (decoder, character_size) = match value[0] {
-			0 => (WINDOWS_1252, 1),
-			1 => (UTF_16LE, 2),
-			2 => (UTF_16BE, 2),
-			_ => (UTF_8, 1),
-		};
-		let (value, _, _) = decoder.decode(&value[1..size.saturating_sub(character_size)]);
-		value.to_string()
+		_ => return Ok((None, size)),
 	};
-	Ok((Some(Tag { name, value }), size + header_size))
+	let value = parse_text(&value);
+	let name = name.to_string();
+	let tag = Tag { name, value };
+	Ok((Some(tag), size))
 }
 
 fn parse_txxx(value: &[u8]) -> Result<Tag, Error> {
