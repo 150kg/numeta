@@ -207,6 +207,10 @@ fn parse_frame_23<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize)
 		b"TSRC" => "ISRC",
 		b"TSSE" => "Encoder settings",
 		b"TYER" => "Year",
+		b"COMM" => {
+			let tag = parse_comm(&value)?;
+			return Ok((Some(tag), size));
+		}
 		b"TXXX" => {
 			let tag = parse_txxx(&value)?;
 			return Ok((Some(tag), size));
@@ -283,6 +287,10 @@ fn parse_frame_24<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize)
 		b"TSRC" => "ISRC",
 		b"TSSE" => "Encoder settings",
 		b"TSST" => "Set subtitle",
+		b"COMM" => {
+			let tag = parse_comm(&value)?;
+			return Ok((Some(tag), size));
+		}
 		b"TXXX" => {
 			let tag = parse_txxx(&value)?;
 			return Ok((Some(tag), size));
@@ -295,6 +303,26 @@ fn parse_frame_24<R: Read + Seek>(source: &mut R) -> Result<(Option<Tag>, usize)
 	Ok((Some(tag), size))
 }
 
+fn parse_comm(value: &[u8]) -> Result<Tag, Error> {
+	let (decoder, character_size) = match value[0] {
+		0 => (WINDOWS_1252, 1),
+		1 => (UTF_16LE, 2),
+		2 => (UTF_16BE, 2),
+		_ => (UTF_8, 1),
+	};
+	let value = &value[4..];
+	let separator = separator(value, character_size);
+	let (a, _, _) = decoder.decode(&value[..separator]);
+	let (b, _, _) = decoder.decode(&value[separator + character_size..]);
+	let value = if a.len() > 0 {
+		format!("{} - {}", a, b)
+	} else {
+		b.to_string()
+	};
+	let name = "Comment".to_string();
+	Ok(Tag { name, value })
+}
+
 fn parse_txxx(value: &[u8]) -> Result<Tag, Error> {
 	let (decoder, character_size) = match value[0] {
 		0 => (WINDOWS_1252, 1),
@@ -302,8 +330,9 @@ fn parse_txxx(value: &[u8]) -> Result<Tag, Error> {
 		2 => (UTF_16BE, 2),
 		_ => (UTF_8, 1),
 	};
+	let value = &value[1..];
 	let separator = separator(value, character_size);
-	let (name, _, _) = decoder.decode(&value[1..separator]);
+	let (name, _, _) = decoder.decode(&value[..separator]);
 	let name = name.to_string();
 	let value = if separator < value.len() {
 		let (value, _, _) = decoder.decode(&value[separator + character_size..]);
@@ -336,7 +365,7 @@ fn parse_text(value: &[u8]) -> String {
 }
 
 fn separator(value: &[u8], character_size: usize) -> usize {
-	let separator = value[1..]
+	let separator = value
 		.chunks(character_size)
 		.position(|values| {
 			let mut zero = true;
@@ -345,7 +374,7 @@ fn separator(value: &[u8], character_size: usize) -> usize {
 			}
 			zero
 		})
-		.map(|position| position * character_size + 1)
+		.map(|position| position * character_size)
 		.unwrap_or(value.len());
 	separator
 }
