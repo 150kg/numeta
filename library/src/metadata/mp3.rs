@@ -321,7 +321,17 @@ fn parse_text(value: &[u8]) -> String {
 		2 => (UTF_16BE, 2),
 		_ => (UTF_8, 1),
 	};
-	let (value, _, _) = decoder.decode(&value[1..value.len().saturating_sub(character_size)]);
+	let value = &value[1..];
+	let value = if character_size.min(value.len()) > 0
+		&& value[value.len() - character_size..]
+			.iter()
+			.all(|character| *character == 0)
+	{
+		&value[..value.len() - character_size]
+	} else {
+		value
+	};
+	let (value, _, _) = decoder.decode(value);
 	value.to_string()
 }
 
