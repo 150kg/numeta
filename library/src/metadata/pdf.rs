@@ -15,6 +15,7 @@ macro_rules! read {
 			encryption_state: None,
 			password: None,
 			raw_objects: BTreeMap::new(),
+			strict: false,
 		}
 		.read($function)?;
 		if document.is_encrypted() && document.encryption_state.is_none() {

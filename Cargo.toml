@@ -9,7 +9,7 @@ name = "numeta"
 path = "src/main.rs"
 
 [dependencies]
-fastrand = "2.3.0"
+fastrand = "2.4.1"
 numeta = { path = "library" }
 
 [workspace]
