@@ -1,5 +1,5 @@
 # numeta
 
-A privacy tool for reading and deleting metadata from files.
+A command-line utility for reading and deleting metadata from files.
 
-Supported formats: `DOCX`, `JPEG`, `PDF`, `PNG`, `WEBP`, `XLSX`
+Supported formats: `DOCX`, `FLAC`, `JPEG`, `MP3`, `PDF`, `PNG`, `WEBP`, `XLSX`
