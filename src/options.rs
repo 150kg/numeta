@@ -42,11 +42,11 @@ fn parse<I: Iterator<Item = String>>(arguments: &mut I) -> Result<Options, ()> {
 	if delete && replace {
 		destination = source.clone();
 	}
-	return Ok(Options {
+	Ok(Options {
 		delete,
 		source: source.unwrap(),
 		destination,
-	});
+	})
 }
 
 #[cfg(test)]

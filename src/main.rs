@@ -17,8 +17,7 @@ fn main() -> Result<(), Error> {
 	let Ok(options) = Options::parse() else {
 		println!("Usage:");
 		println!("  numeta <file>");
-		println!("  numeta -d [-o <file>|-r] <file>");
-		println!("");
+		println!("  numeta -d [-o <file>|-r] <file>\n");
 		println!("Options:");
 		println!("  -d   Delete metadata");
 		println!("  -o   Write the results to a file");

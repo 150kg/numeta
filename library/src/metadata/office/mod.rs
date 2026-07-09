@@ -33,10 +33,9 @@ fn parse_application<R: Read>(source: R, metadata: &mut Vec<Tag>) -> Result<(), 
 				let (name, prefix) = parse_name(start.name().as_ref());
 				let mut namespaces = [(Namespace::XProperties, "".to_string())];
 				for attribute in start.attributes() {
-					if let Some((space, code)) = parse_namespace(&attribute?) {
-						if space == b"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" {
+					if let Some((space, code)) = parse_namespace(&attribute?)
+						&& space == b"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" {
 							namespaces[0].1 = String::from_utf8_lossy(code.unwrap_or(b"")).to_string();
-						}
 					}
 				}
 				if !(name == "Properties" && prefix == namespaces[0].1) {
@@ -156,15 +155,13 @@ pub fn delete<R: Read + Seek, W: Write + Seek>(
 					let event = reader.read_event_into(&mut data)?;
 					match &event {
 						Event::Eof => break,
-						Event::Empty(element) => {
-							if element.name().as_ref() == b"Relationship" {
-								for attribute in element.attributes() {
-									let attribute = attribute?;
-									if attribute.key.as_ref() == b"Type"
-										&& attribute.value.ends_with(b"customXml")
-									{
-										continue 'events;
-									}
+						Event::Empty(element) if element.name().as_ref() == b"Relationship" => {
+							for attribute in element.attributes() {
+								let attribute = attribute?;
+								if attribute.key.as_ref() == b"Type"
+									&& attribute.value.ends_with(b"customXml")
+								{
+									continue 'events;
 								}
 							}
 						}

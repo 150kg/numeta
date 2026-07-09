@@ -21,7 +21,7 @@ pub fn get(data: &[u8], metadata: &mut Vec<Tag>) -> Result<(), Error> {
 		if data.len() < 4 + size {
 			return Err(Error::Metadata);
 		}
-		let mut tokens = (&data[4..4 + size]).splitn(2, |&value| value == b'=');
+		let mut tokens = (data[4..4 + size]).splitn(2, |&value| value == b'=');
 		let name = String::from_utf8_lossy(tokens.next().unwrap()).to_string();
 		let value = String::from_utf8_lossy(tokens.next().unwrap_or(b"")).to_string();
 		metadata.push(Tag { name, value });

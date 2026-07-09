@@ -28,7 +28,7 @@ pub fn get(data: &[u8], metadata: &mut Vec<Tag>) -> Result<(), Error> {
 	match &data[0..2] {
 		b"MM" => parse::<Be>(data, metadata),
 		b"II" => parse::<Le>(data, metadata),
-		_ => return Err(Error::Metadata),
+		_ => Err(Error::Metadata),
 	}
 }
 
@@ -62,7 +62,7 @@ fn parse_directory<B: Bytes>(
 	let count = B::u16(&data[cursor..]) as usize;
 	let mut i = 0;
 	while i < count {
-		let (name, value) = parse_entry::<B>(&data, cursor + 2 + 12 * i)?;
+		let (name, value) = parse_entry::<B>(data, cursor + 2 + 12 * i)?;
 		i += 1;
 		match name {
 			34665 => {

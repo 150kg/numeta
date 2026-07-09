@@ -314,7 +314,7 @@ fn parse_comm(value: &[u8]) -> Result<Tag, Error> {
 	let separator = separator(value, character_size);
 	let (a, _, _) = decoder.decode(&value[..separator]);
 	let (b, _, _) = decoder.decode(&value[separator + character_size..]);
-	let value = if a.len() > 0 {
+	let value = if !a.is_empty() {
 		format!("{} - {}", a, b)
 	} else {
 		b.to_string()
@@ -365,18 +365,17 @@ fn parse_text(value: &[u8]) -> String {
 }
 
 fn separator(value: &[u8], character_size: usize) -> usize {
-	let separator = value
+	value
 		.chunks(character_size)
 		.position(|values| {
 			let mut zero = true;
-			for i in 0..character_size {
-				zero = zero && values[i] == 0;
+			for value in values.iter().take(character_size) {
+				zero = zero && *value == 0;
 			}
 			zero
 		})
 		.map(|position| position * character_size)
-		.unwrap_or(value.len());
-	separator
+		.unwrap_or(value.len())
 }
 
 pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> Result<(), Error> {
@@ -411,9 +410,7 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 			source.read_exact(&mut data)?;
 			let size = parse_size(&data);
 			seek!(source, size)?;
-		} else if &header[0..3] == b"3DI" {
-			break;
-		} else if &header[0..3] == b"TAG" {
+		} else if &header[0..3] == b"3DI" || &header[0..3] == b"TAG" {
 			break;
 		} else {
 			return Err(Error::File);

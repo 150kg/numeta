@@ -16,10 +16,7 @@ use std::{
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 	seek!(source, 8)?;
 	let mut metadata = Vec::new();
-	loop {
-		let Some(size) = size(source)? else {
-			break;
-		};
+	while let Some(size) = size(source)? {
 		let mut name = [0; 4];
 		source.read_exact(&mut name)?;
 		match &name {
@@ -58,10 +55,7 @@ pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> 
 	if copy(&mut source.take(8), destination)? < 8 {
 		return Err(Error::File);
 	}
-	loop {
-		let Some(size) = size(source)? else {
-			break;
-		};
+	while let Some(size) = size(source)? {
 		let mut name = [0; 4];
 		source.read_exact(&mut name)?;
 		match &name {
@@ -170,11 +164,11 @@ fn ztxt<R: Read>(source: &mut R, size: u32) -> Result<Tag, Error> {
 	let mut data = vec![0; size as usize - name.len() - 2];
 	source.read_exact(&mut data)?;
 	let mut value = "".to_string();
-	if compression == 0 {
-		if let Ok(data) = decompress(data.as_slice()) {
-			let (data, _, _) = WINDOWS_1252.decode(&data);
-			value = data.to_string()
-		}
+	if compression == 0
+		&& let Ok(data) = decompress(data.as_slice())
+	{
+		let (data, _, _) = WINDOWS_1252.decode(&data);
+		value = data.to_string()
 	}
 	let name = String::from_utf8_lossy(&name).to_string();
 	Ok(Tag { name, value })

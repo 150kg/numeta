@@ -18,8 +18,8 @@ pub enum Namespace {
 pub fn parse_name(name: &[u8]) -> (String, String) {
 	let name = String::from_utf8_lossy(name).to_string();
 	let mut tokens = name.splitn(2, ':');
-	if let Some(value_1) = tokens.nth(0) {
-		if let Some(value_2) = tokens.nth(0) {
+	if let Some(value_1) = tokens.next() {
+		if let Some(value_2) = tokens.next() {
 			let name = value_2.to_string();
 			let namespace = value_1.to_string();
 			(name, namespace)
@@ -37,10 +37,10 @@ pub fn parse_name(name: &[u8]) -> (String, String) {
 
 pub fn parse_namespace<'a>(attribute: &'a Attribute) -> Option<(&'a [u8], Option<&'a [u8]>)> {
 	let mut tokens = attribute.key.as_ref().split(|&character| character == b':');
-	if !tokens.nth(0).map(|name| name == b"xmlns").unwrap_or(false) {
+	if !tokens.next().map(|name| name == b"xmlns").unwrap_or(false) {
 		return None;
 	}
-	Some((&attribute.value, tokens.nth(0)))
+	Some((&attribute.value, tokens.next()))
 }
 
 pub fn parse_start<R: BufRead>(

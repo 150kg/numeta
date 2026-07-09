@@ -14,10 +14,7 @@ use std::{
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 	seek!(source, 12)?;
 	let mut metadata = Vec::new();
-	loop {
-		let Some(code) = code(source)? else {
-			break;
-		};
+	while let Some(code) = code(source)? {
 		let size = Le::u32(source)?;
 		match &code {
 			b"EXIF" => {
@@ -46,10 +43,7 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> Result<(), Error> {
 	seek!(source, 12)?;
 	let mut data = Vec::new();
-	loop {
-		let Some(code) = code(source)? else {
-			break;
-		};
+	while let Some(code) = code(source)? {
 		let size = Le::u32(source)?;
 		match &code {
 			b"ALPH" | b"ANIM" | b"ANMF" | b"ICCP" | b"VP8 " | b"VP8L" | b"VP8X" => {

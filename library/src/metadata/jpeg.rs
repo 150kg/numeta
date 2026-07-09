@@ -13,10 +13,7 @@ use std::{
 
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 	let mut metadata = Vec::new();
-	loop {
-		let Some(marker) = marker(source)? else {
-			break;
-		};
+	while let Some(marker) = marker(source)? {
 		if marker[0] != 0xFF {
 			return Err(Error::File);
 		}
@@ -28,11 +25,9 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 				}
 			}
 			0xD0..=0xD7 | 0xDA => loop {
-				if Be::u8(source)? == 0xFF {
-					if Be::u8(source)? > 0 {
-						source.seek(SeekFrom::Current(-2))?;
-						break;
-					}
+				if Be::u8(source)? == 0xFF && Be::u8(source)? > 0 {
+					source.seek(SeekFrom::Current(-2))?;
+					break;
 				}
 			},
 			0xD8..=0xD9 => {}
@@ -87,10 +82,7 @@ pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 }
 
 pub fn delete<R: Read + Seek, W: Write>(source: &mut R, destination: &mut W) -> Result<(), Error> {
-	loop {
-		let Some(marker) = marker(source)? else {
-			break;
-		};
+	while let Some(marker) = marker(source)? {
 		if marker[0] != 0xFF {
 			return Err(Error::File);
 		}

@@ -10,7 +10,7 @@ pub fn get(data: &[u8], metadata: &mut Vec<Tag>) -> Result<(), Error> {
 	if data.len() < 12 || &data[0..4] != b"8BIM" {
 		return Err(Error::Metadata);
 	}
-	if &data[4..6] != [0x04, 0x04] {
+	if data[4..6] != [0x04, 0x04] {
 		return Ok(());
 	}
 	let name = Be::u16(&data[6..8]) as usize;
@@ -164,8 +164,8 @@ fn name_value(value: &[u8], record: u8, tag: u8) -> (String, String) {
 		Data::Text => String::from_utf8_lossy(value).to_string(),
 		Data::Number(size) => {
 			let mut number: u64 = 0;
-			for i in 0..min!(size, 8) {
-				number = (number << 8) | value[i] as u64;
+			for digit in value.iter().take(min!(size, 8)) {
+				number = (number << 8) | *digit as u64;
 			}
 			number.to_string()
 		}

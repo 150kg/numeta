@@ -11,10 +11,7 @@ const VORBIS_COMMENT: u8 = 4;
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
 	seek!(source, 4)?;
 	let mut metadata = Vec::new();
-	loop {
-		let Some((last, header)) = read_header(source)? else {
-			break;
-		};
+	while let Some((last, header)) = read_header(source)? {
 		if header.block_type == VORBIS_COMMENT {
 			let mut data = vec![0; header.size as usize];
 			source.read_exact(&mut data)?;
