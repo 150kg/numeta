@@ -10,8 +10,8 @@ use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter, write::SimpleFileO
 mod test;
 
 pub fn get<R: Read + Seek>(source: &mut R) -> Result<Vec<Tag>, Error> {
-	let mut metadata = Vec::new();
 	let mut archive = ZipArchive::new(source)?;
+	let mut metadata = Vec::new();
 	for i in 0..archive.len() {
 		let entry = archive.by_index(i)?;
 		match entry.name() {
@@ -33,9 +33,9 @@ fn parse_application<R: Read>(source: R, metadata: &mut Vec<Tag>) -> Result<(), 
 				let (name, prefix) = parse_name(start.name().as_ref());
 				let mut namespaces = [(Namespace::XProperties, "".to_string())];
 				for attribute in start.attributes() {
-					if let Some((space, code)) = parse_namespace(&attribute?)
-						&& space == b"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" {
-							namespaces[0].1 = String::from_utf8_lossy(code.unwrap_or(b"")).to_string();
+					if let Some((namespace, alias)) = parse_namespace(&attribute?)
+						&& namespace == b"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" {
+							namespaces[0].1 = String::from_utf8_lossy(alias.unwrap_or(b"")).to_string();
 					}
 				}
 				if !(name == "Properties" && prefix == namespaces[0].1) {
@@ -78,18 +78,13 @@ fn parse_core<R: Read>(source: R, metadata: &mut Vec<Tag>) -> Result<(), Error> 
 				];
 				for attribute in start.attributes() {
 					if let Some((namespace, alias)) = parse_namespace(&attribute?) {
-						match namespace {
-							b"http://schemas.openxmlformats.org/package/2006/metadata/core-properties" => {
-								namespaces[0].1 = String::from_utf8_lossy(alias.unwrap_or(b"")).to_string();
-							}
-							b"http://purl.org/dc/elements/1.1/" => {
-								namespaces[1].1 = String::from_utf8_lossy(alias.unwrap_or(b"")).to_string();
-							}
-							b"http://purl.org/dc/terms/" => {
-								namespaces[2].1 = String::from_utf8_lossy(alias.unwrap_or(b"")).to_string();
-							}
-							_ => {}
-						}
+						namespaces[match namespace {
+							b"http://schemas.openxmlformats.org/package/2006/metadata/core-properties" => 0,
+							b"http://purl.org/dc/elements/1.1/" => 1,
+							b"http://purl.org/dc/terms/" => 2,
+							_ => continue,
+						}]
+						.1 = String::from_utf8_lossy(alias.unwrap_or(b"")).to_string();
 					}
 				}
 				if !(name == "coreProperties" && prefix == namespaces[0].1) {

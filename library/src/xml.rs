@@ -37,10 +37,10 @@ pub fn parse_name(name: &[u8]) -> (String, String) {
 
 pub fn parse_namespace<'a>(attribute: &'a Attribute) -> Option<(&'a [u8], Option<&'a [u8]>)> {
 	let mut tokens = attribute.key.as_ref().split(|&character| character == b':');
-	if !tokens.next().map(|name| name == b"xmlns").unwrap_or(false) {
-		return None;
+	if let Some(b"xmlns") = tokens.next() {
+		return Some((&attribute.value, tokens.next()));
 	}
-	Some((&attribute.value, tokens.next()))
+	None
 }
 
 pub fn parse_start<R: BufRead>(

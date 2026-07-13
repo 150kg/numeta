@@ -1,12 +1,15 @@
-use crate::{Error, Tag};
-use quick_xml::{Reader, events::Event, name::QName};
+use crate::{Error, Tag, xml::parse_name};
+use quick_xml::{
+	Reader,
+	events::{BytesStart, Event},
+};
 
 pub fn get(data: &[u8], metadata: &mut Vec<Tag>) -> Result<(), Error> {
 	let data = String::from_utf8_lossy(data);
 	let mut reader = Reader::from_str(&data);
 	loop {
 		match reader.read_event()? {
-			Event::Start(start) => parse(&mut reader, start.name(), true, metadata)?,
+			Event::Start(start) => parse_start(&mut reader, start, true, metadata)?,
 			Event::Eof => break,
 			_ => {}
 		}
@@ -14,26 +17,24 @@ pub fn get(data: &[u8], metadata: &mut Vec<Tag>) -> Result<(), Error> {
 	Ok(())
 }
 
-fn parse(
+fn parse_start(
 	reader: &mut Reader<&[u8]>,
-	name: QName,
+	start: BytesStart,
 	keep: bool,
 	metadata: &mut Vec<Tag>,
 ) -> Result<(), Error> {
-	let code = String::from_utf8_lossy(name.as_ref()).to_string();
-	let mut tokens = code.splitn(2, ':');
-	let code = tokens.nth(1).unwrap_or_else(|| tokens.next().unwrap_or(""));
-	let keep = keep && !matches!(code, "History" | "Manifest" | "Thumbnails");
+	let (name, _) = parse_name(start.name().as_ref());
+	let keep = keep && !matches!(name.as_str(), "History" | "Manifest" | "Thumbnails");
 	loop {
 		match reader.read_event()? {
-			Event::End(end) if end.name() == name => break,
+			Event::End(end) if end.name() == start.name() => break,
 			Event::End(_) | Event::Eof => return Err(Error::Metadata),
-			Event::Start(start) => parse(reader, start.name(), keep, metadata)?,
-			Event::Text(value) if value.trim_ascii().is_empty() => {}
-			Event::Text(value) if keep => {
-				let name = code.to_string();
-				let value = String::from_utf8_lossy(value.as_ref()).to_string();
-				metadata.push(Tag { name, value });
+			Event::Start(start) => parse_start(reader, start, keep, metadata)?,
+			Event::Text(text) if keep && !text.trim_ascii().is_empty() => {
+				metadata.push(Tag {
+					name: name.clone(),
+					value: String::from_utf8_lossy(&text).to_string(),
+				});
 			}
 			_ => {}
 		}

@@ -78,7 +78,7 @@ impl Metadata {
 			0xFF => {
 				if data[1..3] == [0xD8, 0xFF] {
 					return Ok(Some(Metadata::Jpeg));
-				} else if [0xF2u8, 0xF3, 0xFA, 0xFB].contains(&data[1]) {
+				} else if [0xF2, 0xF3, 0xFA, 0xFB].contains(&data[1]) {
 					return Ok(Some(Metadata::Mp3));
 				}
 			}
