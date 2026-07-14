@@ -58,14 +58,17 @@ fn directory(path: &Option<PathBuf>) -> Option<&Path> {
 
 fn create_from_template<P: AsRef<Path>>(template: P) -> PathBuf {
 	let template = template.as_ref();
-	let extension = template.extension().unwrap();
-	let base = template.file_stem().unwrap();
-	let mut name = OsString::new();
-	name.push(base);
-	name.push(".");
-	name.push(extension);
-	let mut suffix = 1;
+	let mut number = 1;
 	loop {
+		let mut name = OsString::from(template.file_stem().unwrap());
+		if number > 1 {
+			name.push("-");
+			name.push(number.to_string());
+		}
+		if let Some(extension) = template.extension() {
+			name.push(".");
+			name.push(extension);
+		}
 		if OpenOptions::new()
 			.write(true)
 			.create_new(true)
@@ -74,13 +77,7 @@ fn create_from_template<P: AsRef<Path>>(template: P) -> PathBuf {
 		{
 			return PathBuf::from(name);
 		}
-		suffix += 1;
-		name.clear();
-		name.push(base);
-		name.push("-");
-		name.push(suffix.to_string());
-		name.push(".");
-		name.push(extension);
+		number += 1;
 	}
 }
 

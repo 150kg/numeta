@@ -31,7 +31,9 @@ fn parse<I: Iterator<Item = String>>(arguments: &mut I) -> Result<Options, ()> {
 			},
 			Some("--") => options = false,
 			Some(value) if options && value.starts_with('-') => return Err(()),
-			Some(value) if source.is_none() => source = Some(PathBuf::from(value)),
+			Some(value) if source.is_none() && !value.is_empty() => {
+				source = Some(PathBuf::from(value))
+			}
 			None => break,
 			_ => return Err(()),
 		}
@@ -80,6 +82,11 @@ fn get_one_file() {
 #[test]
 fn get_two_files() {
 	assert!(parse(&mut arguments!("numeta", "1.png", "2.png")).is_err(),);
+}
+
+#[test]
+fn get_empty_file() {
+	assert!(parse(&mut arguments!("numeta", "")).is_err());
 }
 
 #[test]
