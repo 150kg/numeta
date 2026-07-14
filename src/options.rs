@@ -141,6 +141,11 @@ fn delete_o() {
 }
 
 #[test]
+fn delete_o_empty() {
+	assert!(parse(&mut arguments!("numeta", "-d", "-o", "", "1.png")).is_err());
+}
+
+#[test]
 fn delete_r() {
 	assert_eq!(
 		parse(&mut arguments!("numeta", "-d", "-r", "1.png")),

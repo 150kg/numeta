@@ -32,7 +32,10 @@ fn main() -> Result<(), Error> {
 		return Ok(());
 	};
 	if options.delete {
-		let directory = directory(&options.destination);
+		let directory = match directory(&options.destination) {
+			Some(path) => Cow::Borrowed(path),
+			None => Cow::Owned(current_dir()?),
+		};
 		let temporary = Temporary::unique(directory)?;
 		metadata.delete(&mut source, &mut BufWriter::new(&temporary.writer))?;
 		let destination = options
@@ -47,20 +50,10 @@ fn main() -> Result<(), Error> {
 	Ok(())
 }
 
-fn directory(path: &Option<PathBuf>) -> Cow<'_, Path> {
-	match path {
-		Some(path) => match path.parent() {
-			Some(path) => {
-				if path.as_os_str().is_empty() {
-					Cow::Owned(current_dir().unwrap())
-				} else {
-					Cow::Borrowed(path)
-				}
-			}
-			None => Cow::Borrowed(path),
-		},
-		None => Cow::Owned(current_dir().unwrap()),
-	}
+fn directory(path: &Option<PathBuf>) -> Option<&Path> {
+	path.as_deref()
+		.and_then(Path::parent)
+		.filter(|path| !path.as_os_str().is_empty())
 }
 
 fn create_from_template<P: AsRef<Path>>(template: P) -> PathBuf {
@@ -89,4 +82,35 @@ fn create_from_template<P: AsRef<Path>>(template: P) -> PathBuf {
 		name.push(".");
 		name.push(extension);
 	}
+}
+
+#[test]
+fn test_directory_1() {
+	assert_eq!(
+		directory(&Some("/data/in.png".into())),
+		Some(Path::new("/data"))
+	);
+}
+
+#[test]
+fn test_directory_2() {
+	assert_eq!(
+		directory(&Some("data/in.png".into())),
+		Some(Path::new("data"))
+	);
+}
+
+#[test]
+fn test_directory_3() {
+	assert_eq!(directory(&Some("/in.png".into())), Some(Path::new("/")));
+}
+
+#[test]
+fn test_directory_4() {
+	assert_eq!(directory(&Some("in.png".into())), None);
+}
+
+#[test]
+fn test_directory_5() {
+	assert_eq!(directory(&None), None);
 }
