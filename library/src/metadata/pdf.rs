@@ -1,5 +1,5 @@
 use crate::{Error, Tag, metadata::xmp};
-use lopdf::{Document, Object, Reader, Stream};
+use lopdf::{Dictionary, Document, Object, Reader, Stream};
 use std::{
 	collections::BTreeMap,
 	io::{Read, Seek, Write},
@@ -79,13 +79,9 @@ pub fn delete<R: Read, W: Write>(source: &mut R, destination: &mut W) -> Result<
 				Ok(b"DocTimeStamp") | Ok(b"Metadata") | Ok(b"Sig") => None,
 				_ => {
 					if let Ok(dictionary) = object.as_dict_mut() {
-						dictionary.remove(b"LastModified");
-						dictionary.remove(b"Metadata");
-						dictionary.remove(b"PieceInfo");
+						clean_dictionary(dictionary);
 					} else if let Ok(stream) = object.as_stream_mut() {
-						stream.dict.remove(b"LastModified");
-						stream.dict.remove(b"Metadata");
-						stream.dict.remove(b"PieceInfo");
+						clean_dictionary(&mut stream.dict);
 					}
 					Some((number, object.clone()))
 				}
@@ -93,6 +89,7 @@ pub fn delete<R: Read, W: Write>(source: &mut R, destination: &mut W) -> Result<
 		})
 	)?;
 	document.trailer.remove(b"DocChecksum");
+	document.trailer.remove(b"ID");
 	document.trailer.remove(b"Info");
 	if let Ok(catalog) = document.catalog_mut() {
 		catalog.remove(b"Lang");
@@ -104,4 +101,14 @@ pub fn delete<R: Read, W: Write>(source: &mut R, destination: &mut W) -> Result<
 	document.renumber_objects();
 	document.save_to(destination)?;
 	Ok(())
+}
+
+fn clean_dictionary(dictionary: &mut Dictionary) {
+	dictionary.remove(b"AF");
+	dictionary.remove(b"LastModified");
+	dictionary.remove(b"Metadata");
+	dictionary.remove(b"PieceInfo");
+	if dictionary.has_type(b"EmbeddedFile") {
+		dictionary.remove(b"Params");
+	}
 }
